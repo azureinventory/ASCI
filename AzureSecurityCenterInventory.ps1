@@ -2,11 +2,11 @@
 #                                                                                        #
 #          * Azure Security Center Inventory ( ASCI ) Report Generator *                 #
 #                                                                                        #
-#       Version: 0.0.1                                                                   #
+#       Version: 0.0.2                                                                   #
 #       Authors: Claudio Merola <clvieira@microsoft.com>                                 #
 #                Renato Gregio <renato.gregio@microsoft.com>                             #
 #                                                                                        #
-#       Date: 12/19/2020                                                                 #
+#       Date: 01/05/2020                                                                 #
 #                                                                                        #
 #           https://github.com/RenatoGregio/AzureSecurityCenterInventory                 #
 #                                                                                        #
@@ -40,9 +40,6 @@ $Runtime = Measure-Command -Expression {
 
     <######################################### Environment #########################################>
 
-    #### Creating Excel file variable:
-    $Global:File = ($DefaultPath + "AzureSecurityCenterInventory_Report_" + (get-date -Format "yyyy-MM-dd_HH_mm") + ".xlsx")
-    Write-Debug ('Excel file:' + $File)
 
     #### Generic Conditional Text rules, Excel style specifications for the spreadsheets and tables:
     $tableStyle = "Light20"
@@ -165,6 +162,10 @@ $Runtime = Measure-Command -Expression {
     checkAzCli
     checkPS
 
+    #### Creating Excel file variable:
+    $Global:File = ($DefaultPath + "AzureSecurityCenter_Report_" + (get-date -Format "yyyy-MM-dd_HH_mm") + ".xlsx")
+    Write-Debug ('Excel file:' + $File)
+
     <######################################### Subscriptions #########################################>
     Write-Progress -activity 'Azure Inventory' -Status "1% Complete." -PercentComplete 1 -CurrentOperation 'Discovering Subscriptions..'
 
@@ -200,15 +201,17 @@ $Runtime = Measure-Command -Expression {
     
     $SecSizeNum = $SecSize.'count_'
 
+    Write-Progress -activity 'Azure Inventory' -Status "Security Inventory" -PercentComplete 10 -CurrentOperation "Running Security Advisories extraction.."
+
     if ($SecSizeNum -ge 1) {
-        Start-Job -name 'SecAdvisories' -ScriptBlock {
-            $Loop = $($args[0]) / 1000
+            $Loop = $SecSizeNum / 1000
             $Loop = [math]::ceiling($Loop)
             $Looper = 0
             $Limit = 0
-            $Sec = @()
+            $Global:Sec = @()
             while ($Looper -lt $Loop) {
                 $Looper ++
+                Write-Progress -activity 'Azure Security Inventory' -Status "$Looper / $Loop" -PercentComplete (($Looper/$Loop)*100) -Id 1
                 if ($AdvisoryStatus.IsPresent -and $SubscriptionID.IsPresent) {
                     $SecCenter = az graph query -q "securityresources | order by id asc | where properties['status']['code'] == 'Unhealthy'" --subscription $SubscriptionID --skip $Limit --first 1000 --output json --only-show-errors | ConvertFrom-Json
                 }
@@ -221,17 +224,15 @@ $Runtime = Measure-Command -Expression {
                 else {
                     $SecCenter = az graph query -q "securityresources | order by id asc" --skip $Limit --first 1000 --output json --only-show-errors | ConvertFrom-Json
                 }
-                $Sec += $SecCenter
-                Start-Sleep 3
+                $Global:Sec += $SecCenter
+                Start-Sleep 1
                 $Limit = $Limit + 1000
             }
-            $Sec    
-        } -ArgumentList $SecSizeNum
+            Write-Progress -activity 'Azure Security Inventory' -Status "$Looper / $Loop" -Id 1 -Completed
     }
 }
             
-Write-Progress -activity 'Azure Inventory' -Status "10% Complete." -PercentComplete 10 -CurrentOperation "Finishing Security Advisories extraction jobs.."
-get-job | Wait-Job
+
 
 <######################################### Importing Data to Excel  #########################################>
 
@@ -240,21 +241,17 @@ function ImportDataExcel {
     $Subs = $Subscriptions
 
     Write-Progress -activity 'Azure Inventory' -Status "15% Complete." -PercentComplete 15 -CurrentOperation "Starting to process extraction data.."         
-    $Global:Security = Receive-Job -Name 'SecAdvisories'
-    get-job | Remove-Job
-
-    Start-Job -Name 'Security' -ScriptBlock {
 
         $obj = ''
         $tmp = @()
 
-        foreach ($1 in $($args[0])) {
+        foreach ($1 in $Sec) {
             $data = $1.PROPERTIES
 
-            $sub1 = $($args[1]) | Where-Object { $_.id -eq $1.properties.resourceDetails.Id.Split("/")[2] }
+            $sub1 = $Subs | Where-Object { $_.id -eq $1.properties.resourceDetails.Id.Split("/")[2] }
 
             $obj = @{
-                'Subscription ID'    = $sub1.Name;
+                'Subscription'       = $sub1.Name;
                 'Resource Group'     = $1.RESOURCEGROUP;
                 'Resource Type'      = $data.resourceDetails.Id.Split("/")[7];
                 'Resource Name'      = $data.resourceDetails.Id.Split("/")[8];
@@ -270,31 +267,20 @@ function ImportDataExcel {
             $tmp += $obj
         }
 
-        $tmp
-
-    } -ArgumentList $Security, $Subs | Out-Null
 
     #### Security Center worksheet is always the second sequence:
     Write-Progress -activity 'Azure Inventory' -Status "25% Complete." -PercentComplete 25 -CurrentOperation "Processing Security Center Advisories"         
     Write-Debug ('Generating Security Center sheet.')
-    if ($Security) {
 
         $condtxtsec = $(New-ConditionalText High -Range G:G
             New-ConditionalText High -Range L:L)
 
-        $Global:Secadvco = $Security.Count
 
         Write-Progress -activity 'Azure Inventory' -Status "30% Complete." -PercentComplete 30 -CurrentOperation "Processing Security Center Advisories"    
 
-        while (get-job -Name 'Security' | Where-Object { $_.State -eq 'Running' }) {
-            Start-Sleep -Seconds 2
-        }
-
-        $Sec = Receive-Job -Name 'Security'
-
-        $Sec | 
+        $tmp | 
         ForEach-Object { [PSCustomObject]$_ } | 
-        Select-Object 'Subscription ID',
+        Select-Object 'Subscription',
         'Resource Group',
         'Resource Type',
         'Resource Name',
@@ -308,47 +294,8 @@ function ImportDataExcel {
         'Threats' | 
         Export-Excel -Path $File -WorksheetName 'SecurityCenter' -AutoSize -TableName 'SecurityCenter' -TableStyle $tableStyle -ConditionalText $condtxtsec -KillExcel 
 
-    }
     Write-Progress -activity 'Azure Inventory' -Status "50% Complete." -PercentComplete 50 -CurrentOperation "Processing Security Center Advisories"    
-    <################################################################### Subscriptions ###################################################################>
-    Write-Progress -activity 'Azure Inventory' -Status "75% Complete." -PercentComplete 75 -CurrentOperation "Finishing Security Center Advisories"         
 
-    <#  $ResTable = $sec # | Where-Object { $_.type -ne 'microsoft.advisor/recommendations' }
-    $ResTable2 = $ResTable | Select-Object type, resourceGroup, subscriptionId
-    $ResTable3 = $ResTable2 | Group-Object -Property type, resourceGroup, subscriptionId 
-
-    Write-Debug ('Generating Subscription sheet for: ' + $SUBs.count + ' Subscriptions.')
-
-    $Style = New-ExcelStyle -HorizontalAlignment Center -AutoSize -NumberFormat '0'
-
-    if ($null -ne $obj) {
-        Remove-Variable obj
-    }
-    $tmp = @()
-
-    foreach ($ResourcesSUB in $ResTable3) {
-        $ResourceDetails = $ResourcesSUB.name -split ","
-        $SubName = $SUBs | Where-Object { $_.id -eq ($ResourceDetails[2] -replace (" ", "")) }
-
-        $obj = @{
-            'Subscription'              = $SubName.Name;
-            'Resource Group'            = $ResourceDetails[1];
-            'Security Advisory Type'    = $ResourceDetails[0];
-            'Total Security Advisories' = $ResourcesSUB.Count
-        }
-        $tmp += $obj
-    }
-
-    $tmp | 
-    ForEach-Object { [PSCustomObject]$_ } | 
-    Select-Object 'Subscription',
-    'Resource Group',
-    'Resource Type',
-    'Resources' | Export-Excel -Path $File -WorksheetName 'Subscriptions' -AutoSize -TableName 'Subscriptions' -TableStyle $tableStyle -Style $Style -Numberformat '0' -MoveToEnd 
-
-    Remove-Variable tmp
- 
-    #>
     <################################################################### CHARTS ###################################################################>
 
     Write-Debug ('Generating Overview sheet (Charts).')
