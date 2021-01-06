@@ -2,7 +2,7 @@
 #                                                                                        #
 #          * Azure Security Center Inventory ( ASCI ) Report Generator *                 #
 #                                                                                        #
-#       Version: 0.0.2                                                                   #
+#       Version: 0.0.3                                                                   #
 #       Authors: Claudio Merola <clvieira@microsoft.com>                                 #
 #                Renato Gregio <renato.gregio@microsoft.com>                             #
 #                                                                                        #
@@ -200,8 +200,6 @@ $Runtime = Measure-Command -Expression {
     }
     
     $SecSizeNum = $SecSize.'count_'
-
-    Write-Progress -activity 'Azure Inventory' -Status "Security Inventory" -PercentComplete 10 -CurrentOperation "Running Security Advisories extraction.."
 
     if ($SecSizeNum -ge 1) {
             $Loop = $SecSizeNum / 1000
