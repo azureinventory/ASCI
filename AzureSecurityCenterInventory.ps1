@@ -2,7 +2,7 @@
 #                                                                                        #
 #          * Azure Security Center Inventory ( ASCI ) Report Generator *                 #
 #                                                                                        #
-#       Version: 0.0.4                                                                   #
+#       Version: 0.0.5                                                                   #
 #       Authors: Claudio Merola <clvieira@microsoft.com>                                 #
 #                Renato Gregio <renato.gregio@microsoft.com>                             #
 #                                                                                        #
@@ -21,7 +21,7 @@
 #                                                                                        #
 ##########################################################################################
 
-param ($TenantID, $AdvisoryStatus, $SubscriptionID) 
+param ($TenantID, $AllStatus, $SubscriptionID) 
 
 $Runtime = Measure-Command -Expression {
 
