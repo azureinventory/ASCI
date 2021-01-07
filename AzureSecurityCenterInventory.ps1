@@ -2,7 +2,7 @@
 #                                                                                        #
 #          * Azure Security Center Inventory ( ASCI ) Report Generator *                 #
 #                                                                                        #
-#       Version: 0.0.3                                                                   #
+#       Version: 0.0.4                                                                   #
 #       Authors: Claudio Merola <clvieira@microsoft.com>                                 #
 #                Renato Gregio <renato.gregio@microsoft.com>                             #
 #                                                                                        #
@@ -186,47 +186,47 @@ $Runtime = Measure-Command -Expression {
     Write-Host " "
     Write-Debug ('Extracting total number of Security Advisories from Tenant')
 
-    if ($AdvisoryStatus.IsPresent -and $SubscriptionID.IsPresent) {
-        $SecSize = az graph query -q  "securityresources | where properties['status']['code'] == '$AdvisoryStatus' | summarize count()" --subscription $SubscriptionID --output json --only-show-errors | ConvertFrom-Json    
+    if ($AllStatus.IsPresent -and $SubscriptionID.IsPresent) {
+        $SecSize = az graph query  -q  "securityresources | summarize count()" --subscription $SubscriptionID --output json --only-show-errors | ConvertFrom-Json    
     }
-    elseif ($AdvisoryStatus.IsPresent) {
-        $SecSize = az graph query -q  "securityresources | where properties['status']['code'] == '$AdvisoryStatus' | summarize count()" --output json --only-show-errors | ConvertFrom-Json
+    elseif ($AllStatus.IsPresent) {
+        $SecSize = az graph query -q  "securityresources | summarize count()" --output json --only-show-errors | ConvertFrom-Json
     }
     elseif ($SubscriptionID.IsPresent) {
-        $SecSize = az graph query  -q  "securityresources | summarize count()" --subscription $SubscriptionID --output json --only-show-errors | ConvertFrom-Json
+        $SecSize = az graph query -q  "securityresources | where properties['status']['code'] == 'Unhealthy' | summarize count()" --subscription $SubscriptionID --output json --only-show-errors | ConvertFrom-Json
     }
     else {
-        $SecSize = az graph query -q  "securityresources | summarize count()" --output json --only-show-errors | ConvertFrom-Json
+        $SecSize = az graph query -q  "securityresources | where properties['status']['code'] == 'Unhealthy' | summarize count()" --output json --only-show-errors | ConvertFrom-Json
     }
     
     $SecSizeNum = $SecSize.'count_'
 
     if ($SecSizeNum -ge 1) {
-            $Loop = $SecSizeNum / 1000
-            $Loop = [math]::ceiling($Loop)
-            $Looper = 0
-            $Limit = 0
-            $Global:Sec = @()
-            while ($Looper -lt $Loop) {
-                $Looper ++
-                Write-Progress -activity 'Azure Security Inventory' -Status "$Looper / $Loop" -PercentComplete (($Looper/$Loop)*100) -Id 1
-                if ($AdvisoryStatus.IsPresent -and $SubscriptionID.IsPresent) {
-                    $SecCenter = az graph query -q "securityresources | order by id asc | where properties['status']['code'] == 'Unhealthy'" --subscription $SubscriptionID --skip $Limit --first 1000 --output json --only-show-errors | ConvertFrom-Json
-                }
-                elseif ($AdvisoryStatus.IsPresent) {
-                    $SecCenter = az graph query -q "securityresources | order by id asc | where properties['status']['code'] == 'Unhealthy'" --skip $Limit --first 1000 --output json --only-show-errors | ConvertFrom-Json	
-                }
-                elseif ($SubscriptionID.IsPresent) {
-                    $SecCenter = az graph query -q "securityresources | order by id asc" --subscription $SubscriptionID --skip $Limit --first 1000 --output json --only-show-errors | ConvertFrom-Json
-                }
-                else {
-                    $SecCenter = az graph query -q "securityresources | order by id asc" --skip $Limit --first 1000 --output json --only-show-errors | ConvertFrom-Json
-                }
-                $Global:Sec += $SecCenter
-                Start-Sleep 1
-                $Limit = $Limit + 1000
+        $Loop = $SecSizeNum / 1000
+        $Loop = [math]::ceiling($Loop)
+        $Looper = 0
+        $Limit = 0
+        $Global:Sec = @()
+        while ($Looper -lt $Loop) {
+            $Looper ++
+            Write-Progress -activity 'Azure Security Inventory' -Status "$Looper / $Loop" -PercentComplete (($Looper / $Loop) * 100) -Id 1
+            if ($AllStatus.IsPresent -and $SubscriptionID.IsPresent) {
+                $SecCenter = az graph query  -q  "securityresources | summarize count()" --subscription $SubscriptionID --skip $Limit --first 1000 --output json --only-show-errors | ConvertFrom-Json
             }
-            Write-Progress -activity 'Azure Security Inventory' -Status "$Looper / $Loop" -Id 1 -Completed
+            elseif ($AllStatus.IsPresent) {
+                $SecCenter = az graph query -q  "securityresources | summarize count()" --skip $Limit --first 1000 --output json --only-show-errors | ConvertFrom-Json	
+            }
+            elseif ($SubscriptionID.IsPresent) {
+                $SecCenter = az graph query -q  "securityresources | where properties['status']['code'] == 'Unhealthy' | summarize count()" --subscription $SubscriptionID --skip $Limit --first 1000 --output json --only-show-errors | ConvertFrom-Json
+            }
+            else {
+                $SecCenter = az graph query -q  "securityresources | where properties['status']['code'] == 'Unhealthy' | summarize count()" --skip $Limit --first 1000 --output json --only-show-errors | ConvertFrom-Json
+            }
+            $Global:Sec += $SecCenter
+            Start-Sleep 1
+            $Limit = $Limit + 1000
+        }
+        Write-Progress -activity 'Azure Security Inventory' -Status "$Looper / $Loop" -Id 1 -Completed
     }
 }
             
@@ -240,57 +240,57 @@ function ImportDataExcel {
 
     Write-Progress -activity 'Azure Inventory' -Status "15% Complete." -PercentComplete 15 -CurrentOperation "Starting to process extraction data.."         
 
-        $obj = ''
-        $tmp = @()
+    $obj = ''
+    $tmp = @()
 
-        foreach ($1 in $Sec) {
-            $data = $1.PROPERTIES
+    foreach ($1 in $Sec) {
+        $data = $1.PROPERTIES
 
-            $sub1 = $Subs | Where-Object { $_.id -eq $1.properties.resourceDetails.Id.Split("/")[2] }
+        $sub1 = $Subs | Where-Object { $_.id -eq $1.properties.resourceDetails.Id.Split("/")[2] }
 
-            $obj = @{
-                'Subscription'       = $sub1.Name;
-                'Resource Group'     = $1.RESOURCEGROUP;
-                'Resource Type'      = $data.resourceDetails.Id.Split("/")[7];
-                'Resource Name'      = $data.resourceDetails.Id.Split("/")[8];
-                'Categories'         = [string]$data.metadata.categories;
-                'Control'            = $data.displayName;
-                'Severity'           = $data.metadata.severity;
-                'Status'             = $data.status.code;
-                'Remediation'        = $data.metadata.remediationDescription;
-                'Remediation Effort' = $data.metadata.implementationEffort;
-                'User Impact'        = $data.metadata.userImpact;
-                'Threats'            = [string]$data.metadata.threats
-            }    
-            $tmp += $obj
-        }
+        $obj = @{
+            'Subscription'       = $sub1.Name;
+            'Resource Group'     = $1.RESOURCEGROUP;
+            'Resource Type'      = $data.resourceDetails.Id.Split("/")[7];
+            'Resource Name'      = $data.resourceDetails.Id.Split("/")[8];
+            'Categories'         = [string]$data.metadata.categories;
+            'Control'            = $data.displayName;
+            'Severity'           = $data.metadata.severity;
+            'Status'             = $data.status.code;
+            'Remediation'        = $data.metadata.remediationDescription;
+            'Remediation Effort' = $data.metadata.implementationEffort;
+            'User Impact'        = $data.metadata.userImpact;
+            'Threats'            = [string]$data.metadata.threats
+        }    
+        $tmp += $obj
+    }
 
 
     #### Security Center worksheet is always the second sequence:
     Write-Progress -activity 'Azure Inventory' -Status "25% Complete." -PercentComplete 25 -CurrentOperation "Processing Security Center Advisories"         
     Write-Debug ('Generating Security Center sheet.')
 
-        $condtxtsec = $(New-ConditionalText High -Range G:G
-            New-ConditionalText High -Range L:L)
+    $condtxtsec = $(New-ConditionalText High -Range G:G
+        New-ConditionalText High -Range L:L)
 
 
-        Write-Progress -activity 'Azure Inventory' -Status "30% Complete." -PercentComplete 30 -CurrentOperation "Processing Security Center Advisories"    
+    Write-Progress -activity 'Azure Inventory' -Status "30% Complete." -PercentComplete 30 -CurrentOperation "Processing Security Center Advisories"    
 
-        $tmp | 
-        ForEach-Object { [PSCustomObject]$_ } | 
-        Select-Object 'Subscription',
-        'Resource Group',
-        'Resource Type',
-        'Resource Name',
-        'Categories',
-        'Control',
-        'Severity',
-        'Status',
-        'Remediation',
-        'Remediation Effort',
-        'User Impact',
-        'Threats' | 
-        Export-Excel -Path $File -WorksheetName 'SecurityCenter' -AutoSize -TableName 'SecurityCenter' -TableStyle $tableStyle -ConditionalText $condtxtsec -KillExcel 
+    $tmp | 
+    ForEach-Object { [PSCustomObject]$_ } | 
+    Select-Object 'Subscription',
+    'Resource Group',
+    'Resource Type',
+    'Resource Name',
+    'Categories',
+    'Control',
+    'Severity',
+    'Status',
+    'Remediation',
+    'Remediation Effort',
+    'User Impact',
+    'Threats' | 
+    Export-Excel -Path $File -WorksheetName 'SecurityCenter' -AutoSize -TableName 'SecurityCenter' -TableStyle $tableStyle -ConditionalText $condtxtsec -KillExcel 
 
     Write-Progress -activity 'Azure Inventory' -Status "50% Complete." -PercentComplete 50 -CurrentOperation "Processing Security Center Advisories"    
 
