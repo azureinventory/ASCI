@@ -2,11 +2,11 @@
 #                                                                                        #
 #          * Azure Security Center Inventory ( ASCI ) Report Generator *                 #
 #                                                                                        #
-#       Version: 0.0.6                                                                   #
+#       Version: 0.0.7                                                                   #
 #       Authors: Claudio Merola <clvieira@microsoft.com>                                 #
 #                Renato Gregio <renato.gregio@microsoft.com>                             #
 #                                                                                        #
-#       Date: 01/05/2020                                                                 #
+#       Date: 01/07/2020                                                                 #
 #                                                                                        #
 #           https://github.com/RenatoGregio/AzureSecurityCenterInventory                 #
 #                                                                                        #
@@ -236,13 +236,13 @@ $Runtime = Measure-Command -Expression {
     Write-Debug ('Extracting total number of Security Advisories from Tenant')
 
     if ($AllStatus.IsPresent -and $SubscriptionID.IsPresent) {
-        $SecSize = az graph query  -q  "securityresources | summarize count()" --subscription $SubscriptionID --output json --only-show-errors | ConvertFrom-Json    
+        $SecSize = az graph query  -q  "securityresources | where subscriptionId == $SubscriptionID |  summarize count()"  --output json --only-show-errors | ConvertFrom-Json    
     }
     elseif ($AllStatus.IsPresent) {
         $SecSize = az graph query -q  "securityresources | summarize count()" --output json --only-show-errors | ConvertFrom-Json
     }
     elseif ($SubscriptionID.IsPresent) {
-        $SecSize = az graph query -q  "securityresources | where properties['status']['code'] == 'Unhealthy' | summarize count()" --subscription $SubscriptionID --output json --only-show-errors | ConvertFrom-Json
+        $SecSize = az graph query -q  "securityresources | where properties['status']['code'] == 'Unhealthy' | where subscriptionId == $SubscriptionID  | summarize count()" --output json --only-show-errors | ConvertFrom-Json
     }
     else {
         $SecSize = az graph query -q  "securityresources | where properties['status']['code'] == 'Unhealthy' | summarize count()" --output json --only-show-errors | ConvertFrom-Json
@@ -260,13 +260,13 @@ $Runtime = Measure-Command -Expression {
             $Looper ++
             Write-Progress -activity 'Azure Security Inventory' -Status "$Looper / $Loop" -PercentComplete (($Looper / $Loop) * 100) -Id 1
             if ($AllStatus.IsPresent -and $SubscriptionID.IsPresent) {
-                $SecCenter = az graph query  -q  "securityresources" --subscription $SubscriptionID --skip $Limit --first 1000 --output json --only-show-errors | ConvertFrom-Json
+                $SecCenter = az graph query  -q  "securityresources | where subscriptionId == $SubscriptionID" --skip $Limit --first 1000 --output json --only-show-errors | ConvertFrom-Json
             }
             elseif ($AllStatus.IsPresent) {
                 $SecCenter = az graph query -q  "securityresources" --skip $Limit --first 1000 --output json --only-show-errors | ConvertFrom-Json	
             }
             elseif ($SubscriptionID.IsPresent) {
-                $SecCenter = az graph query -q  "securityresources | where properties['status']['code'] == 'Unhealthy'" --subscription $SubscriptionID --skip $Limit --first 1000 --output json --only-show-errors | ConvertFrom-Json
+                $SecCenter = az graph query -q  "securityresources | where properties['status']['code'] == 'Unhealthy'| where subscriptionId == $SubscriptionID" --skip $Limit --first 1000 --output json --only-show-errors | ConvertFrom-Json
             }
             else {
                 $SecCenter = az graph query -q  "securityresources | where properties['status']['code'] == 'Unhealthy'" --skip $Limit --first 1000 --output json --only-show-errors | ConvertFrom-Json
@@ -290,7 +290,13 @@ function ImportDataExcel {
     $obj = ''
     $tmp = @()
 
+    $cp = 0
+
     foreach ($1 in $Sec) {
+
+        $cp ++
+        Write-Progress -activity 'Processing Security Inventory' -PercentComplete (($cp / $Sec.count) * 100) -Id 1
+        
         $data = $1.PROPERTIES
 
         $sub1 = $Subs | Where-Object { $_.id -eq $1.properties.resourceDetails.Id.Split("/")[2] }
@@ -311,6 +317,8 @@ function ImportDataExcel {
         }    
         $tmp += $obj
     }
+
+    Write-Progress -activity 'Processing Security Inventory' -Completed -Id 1
 
 
     #### Security Center worksheet is always the second sequence:
