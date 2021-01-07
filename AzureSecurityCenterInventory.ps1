@@ -20,7 +20,55 @@
 #        no warranties and confer no rights.                                             #
 #                                                                                        #
 ##########################################################################################
+<#
+.SYNOPSIS  
+    This script creates Excel file to Analyze Azure Security Center inside a Tenant
+  
+.DESCRIPTION  
+    Do you want to analyze your security center Advisories in a table format? Document it in xlsx format.
+ 
+.PARAMETER TenantID
+    Specify the tenant ID you want to create a Resource Inventory.
+    
+    >>> IMPORTANT: YOU NEED TO USE THIS PARAMETER FOR TENANTS WITH MULTI-FACTOR AUTHENTICATION. <<< 
+ 
+.PARAMETER SubscriptionID
+    Use this parameter to collect a specific Subscription in a Tenant
 
+.PARAMETER AllStatus
+    By Default Azure Security Center Inventory catch only "unhealthy" advisory Status. Use this parameter for all Advisories, including "heanthy" and "NotApplicable".
+    This option can increase considerably your collect time. 
+    See Microsoft Docs for best understandment: https://docs.microsoft.com/en-us/azure/security-center/security-center-recommendations
+
+.PARAMETER Debug
+    Execute ASCI in debug mode. 
+
+.EXAMPLE
+    Default utilization. Read all tenants you have privileges, select a tenant in menu and collect from all subscriptions:
+    PS C:\> .\AzureSecurityCenterInventory.ps1
+
+    Read all tenants you have privileges, select a tenant in menu and collect from All Status all subscriptions:
+    PS C:\>.\AzureSecurityCenterInventory.ps1 -AllStatus
+
+    Define the Tenant ID and collect all "unhealthy" Security Advisories:
+    PS C:\> .\AzureSecurityCenterInventory.ps1 -TenantID <your-Tenant-Id>
+
+    Define the Tenant ID and collect all "unhealthy" Security Advisories for a specific Subscription:
+    PS C:\>.\AzureSecurityCenterInventory.ps1 -TenantID <your-Tenant-Id> -SubscriptionID <your-Subscription-Id>
+    
+    Define the Tenant ID and collect all Security Advisories:
+    PS C:\>.\AzureSecurityCenterInventory.ps1 -TenantID <your-Tenant-Id> -AllStatus
+    
+    Define the Tenant ID and collect all Security Advisories for a specific Subscription:
+    PS C:\>.\AzureSecurityCenterInventory.ps1 -TenantID <your-Tenant-Id> -SubscriptionID <your-Subscription-Id> -AllStatus
+
+.NOTES
+    AUTHOR: Claudio Merola and Renato Gregio - Customer Engineer - Customer Success Unit | Azure Infrastucture/Automation/Devops/Governance | Microsoft
+
+.LINK
+    https://github.com/azureinventory
+    Please note that while being developed by a Microsoft employee, Azure inventory Scripts is not a Microsoft service or product. Azure Inventory Scripts are a personal driven project, there are none implicit or explicit obligations related to this project, it is provided 'as is' with no warranties and confer no rights.
+#>
 param ($TenantID, $AllStatus, $SubscriptionID) 
 
 $Runtime = Measure-Command -Expression {
@@ -32,9 +80,6 @@ $Runtime = Measure-Command -Expression {
     $ErrorActionPreference = "silentlycontinue"
     $DesktopPath = "C:\AzureInventory"
     $CSPath = "$HOME/AzureInventory"
-    $Global:Resources = @()
-    $Global:Advisories = ''
-    $Global:Security = ''
     $Global:Subscriptions = ''
 
 
@@ -61,6 +106,10 @@ $Runtime = Measure-Command -Expression {
         Write-Output "For PowerShell Desktop:"      
         Write-Output "./AzureSecurityCenterInventory.ps1 -TenantID <Azure Tenant ID> -SubscriptionID <Subscription ID>"
         Write-Output "" 
+        Write-Output "For All Security Advisory Status:"      
+        Write-Output "./AzureSecurityCenterInventory.ps1 -AllStatus"
+        Write-Output "" 
+        Write-Output "This option can increase considerably the amount of time to collect"         
         Write-Output "" 
     }
 
@@ -230,8 +279,6 @@ $Runtime = Measure-Command -Expression {
     }
 }
             
-
-
 <######################################### Importing Data to Excel  #########################################>
 
 function ImportDataExcel {
