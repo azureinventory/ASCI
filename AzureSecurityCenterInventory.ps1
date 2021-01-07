@@ -2,7 +2,7 @@
 #                                                                                        #
 #          * Azure Security Center Inventory ( ASCI ) Report Generator *                 #
 #                                                                                        #
-#       Version: 0.0.7                                                                   #
+#       Version: 0.0.8                                                                   #
 #       Authors: Claudio Merola <clvieira@microsoft.com>                                 #
 #                Renato Gregio <renato.gregio@microsoft.com>                             #
 #                                                                                        #
@@ -235,14 +235,14 @@ $Runtime = Measure-Command -Expression {
     Write-Host " "
     Write-Debug ('Extracting total number of Security Advisories from Tenant')
 
-    if ($AllStatus.IsPresent -and $SubscriptionID.IsPresent) {
-        $SecSize = az graph query  -q  "securityresources | where subscriptionId == $SubscriptionID |  summarize count()"  --output json --only-show-errors | ConvertFrom-Json    
+    if ($AllStatus.IsPresent -and $SubscriptionID) {
+        $SecSize = az graph query  -q  "securityresources | where subscriptionId == '$SubscriptionID' |  summarize count()"  --output json --only-show-errors | ConvertFrom-Json    
     }
     elseif ($AllStatus.IsPresent) {
         $SecSize = az graph query -q  "securityresources | summarize count()" --output json --only-show-errors | ConvertFrom-Json
     }
-    elseif ($SubscriptionID.IsPresent) {
-        $SecSize = az graph query -q  "securityresources | where properties['status']['code'] == 'Unhealthy' | where subscriptionId == $SubscriptionID  | summarize count()" --output json --only-show-errors | ConvertFrom-Json
+    elseif ($SubscriptionID) {
+        $SecSize = az graph query -q  "securityresources | where properties['status']['code'] == 'Unhealthy' | where subscriptionId == '$SubscriptionID'  | summarize count()" --output json --only-show-errors | ConvertFrom-Json
     }
     else {
         $SecSize = az graph query -q  "securityresources | where properties['status']['code'] == 'Unhealthy' | summarize count()" --output json --only-show-errors | ConvertFrom-Json
@@ -259,14 +259,14 @@ $Runtime = Measure-Command -Expression {
         while ($Looper -lt $Loop) {
             $Looper ++
             Write-Progress -activity 'Azure Security Inventory' -Status "$Looper / $Loop" -PercentComplete (($Looper / $Loop) * 100) -Id 1
-            if ($AllStatus.IsPresent -and $SubscriptionID.IsPresent) {
-                $SecCenter = az graph query  -q  "securityresources | where subscriptionId == $SubscriptionID" --skip $Limit --first 1000 --output json --only-show-errors | ConvertFrom-Json
+            if ($AllStatus.IsPresent -and $SubscriptionID) {
+                $SecCenter = az graph query  -q  "securityresources | where subscriptionId == '$SubscriptionID'" --skip $Limit --first 1000 --output json --only-show-errors | ConvertFrom-Json
             }
             elseif ($AllStatus.IsPresent) {
                 $SecCenter = az graph query -q  "securityresources" --skip $Limit --first 1000 --output json --only-show-errors | ConvertFrom-Json	
             }
-            elseif ($SubscriptionID.IsPresent) {
-                $SecCenter = az graph query -q  "securityresources | where properties['status']['code'] == 'Unhealthy'| where subscriptionId == $SubscriptionID" --skip $Limit --first 1000 --output json --only-show-errors | ConvertFrom-Json
+            elseif ($SubscriptionID) {
+                $SecCenter = az graph query -q  "securityresources | where properties['status']['code'] == 'Unhealthy'| where subscriptionId == '$SubscriptionID'" --skip $Limit --first 1000 --output json --only-show-errors | ConvertFrom-Json
             }
             else {
                 $SecCenter = az graph query -q  "securityresources | where properties['status']['code'] == 'Unhealthy'" --skip $Limit --first 1000 --output json --only-show-errors | ConvertFrom-Json
